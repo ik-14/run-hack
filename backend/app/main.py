@@ -152,6 +152,18 @@ async def _handle_lobby_message(
                     "extend": fix.extended,
                 },
             )
+            if fix.grace_left_s is not None or fix.returned:
+                await connections.broadcast(
+                    room.code,
+                    {
+                        "type": "oob",
+                        "pid": fix.player.pid,
+                        "grace_left_s": fix.grace_left_s,
+                        "disqualified": fix.disqualified,
+                    },
+                )
+            if fix.disqualified:
+                await connections.broadcast(room.code, rooms.get(room.code).snapshot())
             if fix.claimed_m2 is not None:
                 await connections.broadcast(
                     room.code,

@@ -14,6 +14,7 @@ type Props = {
   fix: Fix | null;
   gpsError: string | null;
   lastClaim: { pid: string; area_m2: number } | null;
+  outOfBounds: { graceLeftS: number; disqualified: boolean } | null;
   onRoundMinutes: (minutes: number) => void;
   onBounds: (bounds: Bounds) => void;
   onStart: () => void;
@@ -27,6 +28,7 @@ export function LobbyScreen({
   fix,
   gpsError,
   lastClaim,
+  outOfBounds,
   onRoundMinutes,
   onBounds,
   onStart,
@@ -47,6 +49,17 @@ export function LobbyScreen({
 
   return (
     <div className="flex flex-col gap-5">
+      {outOfBounds && (
+        <p
+          className={`rounded-xl px-4 py-4 text-center text-lg font-black ${
+            outOfBounds.disqualified ? "bg-red-600 text-white" : "bg-amber-400 text-black"
+          }`}
+        >
+          {outOfBounds.disqualified
+            ? "Disqualified — you stayed outside the play area"
+            : `Out of bounds! Get back in within ${outOfBounds.graceLeftS.toFixed(0)}s`}
+        </p>
+      )}
       <header className="space-y-1">
         <button
           onClick={onLeave}
@@ -130,6 +143,14 @@ export function LobbyScreen({
                 />
                 {player.name}
                 {player.pid === pid && <span className="text-white/40"> (you)</span>}
+                {player.disqualified && (
+                  <span className="text-xs uppercase tracking-widest text-red-400">out</span>
+                )}
+                {!player.disqualified && player.outside && (
+                  <span className="text-xs uppercase tracking-widest text-amber-300">
+                    outside
+                  </span>
+                )}
               </span>
               {player.area_m2 > 0 && (
                 <span className="font-mono text-sm text-white/70">

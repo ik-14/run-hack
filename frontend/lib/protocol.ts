@@ -14,6 +14,8 @@ export type LobbyPlayer = {
   /** Claimed ground: one closed ring of [lat, lng] per owned area. */
   territory: Point[][];
   area_m2: number;
+  outside: boolean;
+  disqualified: boolean;
 };
 
 export type Bounds = {
@@ -45,6 +47,8 @@ export type ServerMessage =
       extend: boolean;
     }
   | { type: "claim"; pid: string; area_m2: number }
+  /** grace_left_s is null once the runner is back inside the play area. */
+  | { type: "oob"; pid: string; grace_left_s: number | null; disqualified: boolean }
   | { type: "error"; detail: string };
 
 export type ClientMessage =

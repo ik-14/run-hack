@@ -31,6 +31,8 @@ MIN_TRAIL_STEP_M = 5.0
 MAX_SPEED_MPS = 12.0
 # Phones can report fixes back to back, so the speed check assumes at least this gap.
 MIN_FIX_GAP_S = 2.0
+# How long a runner has to get back inside the play area before they are out (DESIGN.md §7).
+OOB_GRACE_S = 30.0
 
 RoomStatus = Literal["lobby", "running"]
 
@@ -47,6 +49,12 @@ class FixResult:
     extended: bool = False
     # The player's total territory in m² when this fix closed a loop, else None.
     claimed_m2: float | None = None
+    # Seconds left to get back inside, or None while the runner is in bounds.
+    grace_left_s: float | None = None
+    # True on the fix that disqualifies the runner.
+    disqualified: bool = False
+    # True on the fix that brings the runner back inside the play area.
+    returned: bool = False
 
 
 @dataclass
@@ -63,6 +71,9 @@ class Player:
     trail: list[tuple[float, float]] = field(default_factory=list[tuple[float, float]])
     # Ground this player owns, in lat/lng degrees.
     land: BaseGeometry | None = None
+    # Device clock (ms) when the runner left the play area, else None.
+    outside_since: float | None = None
+    disqualified: bool = False
 
     def state(self, latitude: float) -> dict[str, object]:
         return {
@@ -75,6 +86,8 @@ class Player:
             "trail": [list(point) for point in self.trail],
             "territory": [[list(point) for point in ring] for ring in territory.rings(self.land)],
             "area_m2": round(territory.area_m2(self.land, latitude), 1),
+            "outside": self.outside_since is not None,
+            "disqualified": self.disqualified,
         }
 
 
@@ -182,6 +195,8 @@ class RoomRegistry:
         for player in room.players.values():
             player.trail.clear()
             player.land = None
+            player.outside_since = None
+            player.disqualified = False
         return room
 
     def record_position(self, code: str, pid: str, pos: Pos) -> FixResult:
@@ -199,7 +214,11 @@ class RoomRegistry:
                 return result
 
         player.lat, player.lng, player.seen_at = pos.lat, pos.lng, pos.t
-        if room.status != "running":
+        if room.status != "running" or player.disqualified:
+            return result
+
+        self._check_bounds(room, player, pos, result)
+        if player.disqualified or player.outside_since is not None:
             return result
 
         tail = player.trail[-1] if player.trail else None
@@ -213,6 +232,28 @@ class RoomRegistry:
         result.extended = True
         result.claimed_m2 = self._try_claim(room, player)
         return result
+
+    def _check_bounds(self, room: Room, player: Player, pos: Pos, result: FixResult) -> None:
+        """Start, clear or expire the out-of-bounds countdown for this fix."""
+        bounds = room.bounds
+        if bounds is None:
+            return
+        inside = bounds.south <= pos.lat <= bounds.north and bounds.west <= pos.lng <= bounds.east
+        if inside:
+            result.returned = player.outside_since is not None
+            player.outside_since = None
+            return
+
+        if player.outside_since is None:
+            player.outside_since = pos.t
+        away_s = (pos.t - player.outside_since) / 1000.0
+        if away_s >= OOB_GRACE_S:
+            player.disqualified = True
+            player.outside_since = None
+            result.disqualified = True
+            result.grace_left_s = 0.0
+            return
+        result.grace_left_s = round(OOB_GRACE_S - away_s, 1)
 
     def _try_claim(self, room: Room, player: Player) -> float | None:
         """Close the streak into territory, taking any overlap off the other players."""

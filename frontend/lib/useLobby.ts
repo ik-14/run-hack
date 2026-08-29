@@ -20,6 +20,8 @@ export type Lobby = {
   error: string | null;
   /** The most recent loop closure, for the claim banner. */
   lastClaim: { pid: string; area_m2: number } | null;
+  /** Set while you are outside the play area, counting down to disqualification. */
+  outOfBounds: { graceLeftS: number; disqualified: boolean } | null;
   isHost: boolean;
   createRoom: (name: string, color: string) => void;
   joinRoom: (room: string, name: string, color: string) => void;
@@ -58,6 +60,8 @@ export function useLobby(): Lobby {
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastClaim, setLastClaim] = useState<{ pid: string; area_m2: number } | null>(null);
+  const [outOfBounds, setOutOfBounds] = useState<Lobby["outOfBounds"]>(null);
+  const pidRef = useRef<string | null>(null);
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -87,6 +91,7 @@ export function useLobby(): Lobby {
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data as string) as ServerMessage;
         if (message.type === "joined") {
+          pidRef.current = message.pid;
           setPid(message.pid);
         } else if (message.type === "lobby") {
           setLobby(message);
@@ -94,6 +99,18 @@ export function useLobby(): Lobby {
           setLobby((prev) => (prev ? applyPosition(prev, message) : prev));
         } else if (message.type === "claim") {
           setLastClaim({ pid: message.pid, area_m2: message.area_m2 });
+        } else if (message.type === "oob") {
+          if (message.pid !== pidRef.current) return;
+          if (message.grace_left_s === null && !message.disqualified) {
+            setOutOfBounds(null);
+            return;
+          }
+          setOutOfBounds({
+            graceLeftS: message.grace_left_s ?? 0,
+            disqualified: message.disqualified,
+          });
+          // Buzz the phone: the runner is looking at the pavement, not the screen.
+          navigator.vibrate?.(message.disqualified ? [400, 100, 400] : 300);
         } else if (message.type === "error") {
           setError(message.detail);
         }
@@ -121,6 +138,8 @@ export function useLobby(): Lobby {
     setLobby(null);
     setError(null);
     setLastClaim(null);
+    setOutOfBounds(null);
+    pidRef.current = null;
   }, []);
 
   useEffect(() => () => socketRef.current?.close(), []);
@@ -131,6 +150,7 @@ export function useLobby(): Lobby {
     lobby,
     error,
     lastClaim,
+    outOfBounds,
     isHost: lobby !== null && pid !== null && lobby.host === pid,
     createRoom: (name, color) => connect({ type: "create", name, color }),
     joinRoom: (room, name, color) =>
