@@ -7,12 +7,20 @@ export type LobbyPlayer = {
   connected: boolean;
 };
 
+export type Bounds = {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+};
+
 export type LobbyState = {
   type: "lobby";
   room: string;
   status: "lobby" | "running";
   host: string;
   round_minutes: number;
+  bounds: Bounds | null;
   players: LobbyPlayer[];
 };
 
@@ -26,6 +34,7 @@ export type ClientMessage =
   | { type: "create"; name: string; color: string }
   | { type: "join"; room: string; name: string; color: string }
   | { type: "config"; round_minutes: number }
+  | ({ type: "bounds" } & Bounds)
   | { type: "start" };
 
 export const ROUND_MINUTE_CHOICES = [5, 10, 20] as const;

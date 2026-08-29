@@ -1,7 +1,17 @@
 import pytest
 
 from app.lobby import MAX_PLAYERS, LobbyError, RoomRegistry
-from app.protocol import PALETTE
+from app.protocol import PALETTE, Bounds
+
+
+def a_rectangle(side_deg: float = 0.005) -> Bounds:
+    return Bounds(
+        type="bounds",
+        south=51.5,
+        west=-0.12,
+        north=51.5 + side_deg,
+        east=-0.12 + side_deg,
+    )
 
 
 def test_create_makes_host_the_only_player():
@@ -61,9 +71,31 @@ def test_join_full_room():
         registry.join(room.code, "late")
 
 
+def test_start_needs_a_play_area():
+    registry = RoomRegistry()
+    room, host = registry.create("kal")
+
+    with pytest.raises(LobbyError, match="draw the play area"):
+        registry.start(room.code, host.pid)
+
+
+def test_play_area_must_be_a_sensible_size():
+    registry = RoomRegistry()
+    room, host = registry.create("kal")
+
+    with pytest.raises(LobbyError, match="at least"):
+        registry.set_bounds(room.code, host.pid, a_rectangle(0.0001))
+    with pytest.raises(LobbyError, match="under"):
+        registry.set_bounds(room.code, host.pid, a_rectangle(0.1))
+
+    updated = registry.set_bounds(room.code, host.pid, a_rectangle())
+    assert updated.bounds is not None
+
+
 def test_join_after_start_is_rejected():
     registry = RoomRegistry()
     room, host = registry.create("kal")
+    registry.set_bounds(room.code, host.pid, a_rectangle())
     registry.start(room.code, host.pid)
 
     with pytest.raises(LobbyError, match="already started"):
@@ -79,6 +111,8 @@ def test_only_host_can_start_or_configure():
         registry.start(room.code, guest.pid)
     with pytest.raises(LobbyError, match="only the host"):
         registry.set_round_minutes(room.code, guest.pid, 5)
+    with pytest.raises(LobbyError, match="only the host"):
+        registry.set_bounds(room.code, guest.pid, a_rectangle())
 
 
 def test_round_length_must_be_a_choice():

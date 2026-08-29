@@ -5,7 +5,7 @@ See DESIGN.md §4. Only the lobby subset of the protocol is implemented so far.
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter, field_validator
+from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 
 MAX_NAME_LENGTH = 16
 ROUND_MINUTE_CHOICES = (5, 10, 20)
@@ -66,11 +66,27 @@ class Config(BaseModel):
     round_minutes: int
 
 
+class Bounds(BaseModel):
+    """The play-area rectangle the host drags out on the map."""
+
+    type: Literal["bounds"]
+    south: float = Field(ge=-90, le=90)
+    west: float = Field(ge=-180, le=180)
+    north: float = Field(ge=-90, le=90)
+    east: float = Field(ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def _check_order(self) -> "Bounds":
+        if self.north <= self.south or self.east <= self.west:
+            raise ValueError("the play area must have a positive width and height")
+        return self
+
+
 class Start(BaseModel):
     type: Literal["start"]
 
 
-ClientMessage = Annotated[Create | Join | Config | Start, Field(discriminator="type")]
+ClientMessage = Annotated[Create | Join | Config | Bounds | Start, Field(discriminator="type")]
 
 client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
 

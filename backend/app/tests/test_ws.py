@@ -85,6 +85,15 @@ def test_guest_cannot_start():
             }
 
 
+BOUNDS = {
+    "type": "bounds",
+    "south": 51.5,
+    "west": -0.12,
+    "north": 51.505,
+    "east": -0.115,
+}
+
+
 def test_host_configures_and_starts():
     with TestClient(app) as client, client.websocket_connect("/ws") as host:
         host.send_json({"type": "create", "name": "kal"})
@@ -95,8 +104,32 @@ def test_host_configures_and_starts():
         assert host.receive_json()["round_minutes"] == 5
 
         host.send_json({"type": "start"})
+        assert host.receive_json() == {
+            "type": "error",
+            "detail": "draw the play area on the map first",
+        }
+
+        host.send_json(BOUNDS)
+        assert host.receive_json()["bounds"] == {
+            "south": 51.5,
+            "west": -0.12,
+            "north": 51.505,
+            "east": -0.115,
+        }
+
+        host.send_json({"type": "start"})
         assert host.receive_json()["status"] == "running"
         assert host.receive_json() == {"type": "started", "round_minutes": 5}
+
+
+def test_inverted_rectangle_is_rejected():
+    with TestClient(app) as client, client.websocket_connect("/ws") as host:
+        host.send_json({"type": "create", "name": "kal"})
+        host.receive_json()
+        host.receive_json()
+
+        host.send_json({**BOUNDS, "north": 51.4})
+        assert "positive width" in host.receive_json()["detail"]
 
 
 def test_joining_missing_room_errors():

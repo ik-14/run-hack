@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  Bounds,
   ClientMessage,
   LobbyState,
   ServerMessage,
@@ -20,6 +21,7 @@ export type Lobby = {
   createRoom: (name: string, color: string) => void;
   joinRoom: (room: string, name: string, color: string) => void;
   setRoundMinutes: (minutes: number) => void;
+  setBounds: (bounds: Bounds) => void;
   start: () => void;
   leave: () => void;
 };
@@ -97,6 +99,7 @@ export function useLobby(): Lobby {
     joinRoom: (room, name, color) =>
       connect({ type: "join", room: room.toUpperCase(), name, color }),
     setRoundMinutes: (minutes) => send({ type: "config", round_minutes: minutes }),
+    setBounds: (bounds) => send({ type: "bounds", ...bounds }),
     start: () => send({ type: "start" }),
     leave,
   };

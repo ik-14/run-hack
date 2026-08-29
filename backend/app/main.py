@@ -17,6 +17,8 @@ from app.lobby import LobbyError, Player, Room, RoomRegistry
 from app.protocol import (
     PALETTE,
     ROUND_MINUTE_CHOICES,
+    Bounds,
+    ClientMessage,
     Config,
     Create,
     Join,
@@ -105,7 +107,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 
 async def _handle_entry(
-    websocket: WebSocket, message: Create | Join | Config | Start
+    websocket: WebSocket, message: ClientMessage
 ) -> tuple[Room | None, Player | None]:
     if isinstance(message, Create):
         room, player = rooms.create(message.name, message.color)
@@ -128,11 +130,14 @@ async def _handle_entry(
 
 
 async def _handle_lobby_message(
-    websocket: WebSocket, room: Room, player: Player, message: Create | Join | Config | Start
+    websocket: WebSocket, room: Room, player: Player, message: ClientMessage
 ) -> None:
     try:
         if isinstance(message, Config):
             updated = rooms.set_round_minutes(room.code, player.pid, message.round_minutes)
+            await connections.broadcast(room.code, updated.snapshot())
+        elif isinstance(message, Bounds):
+            updated = rooms.set_bounds(room.code, player.pid, message)
             await connections.broadcast(room.code, updated.snapshot())
         elif isinstance(message, Start):
             updated = rooms.start(room.code, player.pid)

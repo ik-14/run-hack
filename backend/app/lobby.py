@@ -12,12 +12,15 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Literal
 
-from app.protocol import PALETTE, ROUND_MINUTE_CHOICES
+from app.geo import bounds_size_metres
+from app.protocol import PALETTE, ROUND_MINUTE_CHOICES, Bounds
 
 ROOM_CODE_LENGTH = 4
 ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 MAX_PLAYERS = len(PALETTE)
 DEFAULT_ROUND_MINUTES = 10
+MIN_PLAY_AREA_SIDE_M = 50.0
+MAX_PLAY_AREA_SIDE_M = 5000.0
 
 RoomStatus = Literal["lobby", "running"]
 
@@ -40,6 +43,7 @@ class Room:
     host_pid: str
     round_minutes: int = DEFAULT_ROUND_MINUTES
     status: RoomStatus = "lobby"
+    bounds: Bounds | None = None
     players: dict[str, Player] = field(default_factory=dict[str, Player])
 
     def snapshot(self) -> dict[str, object]:
@@ -49,6 +53,7 @@ class Room:
             "status": self.status,
             "host": self.host_pid,
             "round_minutes": self.round_minutes,
+            "bounds": None if self.bounds is None else self.bounds.model_dump(exclude={"type"}),
             "players": [
                 {"pid": p.pid, "name": p.name, "color": p.color, "connected": p.connected}
                 for p in self.players.values()
@@ -111,10 +116,25 @@ class RoomRegistry:
         room.round_minutes = minutes
         return room
 
+    def set_bounds(self, code: str, pid: str, bounds: Bounds) -> Room:
+        room = self._host_room(code, pid)
+        width_m, height_m = bounds_size_metres(bounds)
+        smallest, largest = min(width_m, height_m), max(width_m, height_m)
+        if smallest < MIN_PLAY_AREA_SIDE_M:
+            raise LobbyError(f"the play area must be at least {MIN_PLAY_AREA_SIDE_M:.0f} m across")
+        if largest > MAX_PLAY_AREA_SIDE_M:
+            raise LobbyError(
+                f"the play area must be under {MAX_PLAY_AREA_SIDE_M / 1000:.0f} km across"
+            )
+        room.bounds = bounds
+        return room
+
     def start(self, code: str, pid: str) -> Room:
         room = self._host_room(code, pid)
         if room.status != "lobby":
             raise LobbyError("the round is already running")
+        if room.bounds is None:
+            raise LobbyError("draw the play area on the map first")
         room.status = "running"
         return room
 
