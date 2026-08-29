@@ -8,3 +8,5 @@ Paper.io, but you claim territory by actually running. Mobile web app, GPS trail
 shared map, closed loops become your land, round-based multiplayer with friends.
 
 See [DESIGN.md](./DESIGN.md) for the full design and implementation plan.
+
+Ethan test
