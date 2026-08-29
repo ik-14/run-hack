@@ -77,6 +77,8 @@ Client → server:
 ```ts
 { type: 'create', name: 'kal', color: '#84cc16' }
 { type: 'join',   room: 'ABCD', name: 'kal', color: '#84cc16' }
+{ type: 'rejoin', room: 'ABCD', pid: 'a1b2c3d4' }            // after a dropped socket
+{ type: 'leave' }                                            // deliberate exit, unlike a drop
 { type: 'config', round_minutes: 10 }                        // host only
 { type: 'bounds', south, west, north, east }                 // host only, drawn rectangle
 { type: 'start' }                                            // host only

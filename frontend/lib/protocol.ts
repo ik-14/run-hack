@@ -54,6 +54,8 @@ export type ServerMessage =
 export type ClientMessage =
   | { type: "create"; name: string; color: string }
   | { type: "join"; room: string; name: string; color: string }
+  | { type: "rejoin"; room: string; pid: string }
+  | { type: "leave" }
   | { type: "config"; round_minutes: number }
   | ({ type: "bounds" } & Bounds)
   | { type: "start" }

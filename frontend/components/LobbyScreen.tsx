@@ -143,7 +143,12 @@ export function LobbyScreen({
                 />
                 {player.name}
                 {player.pid === pid && <span className="text-white/40"> (you)</span>}
-                {player.lat === null && (
+                {!player.connected && (
+                  <span className="text-xs uppercase tracking-widest text-amber-300">
+                    offline
+                  </span>
+                )}
+                {player.connected && player.lat === null && (
                   <span className="text-xs uppercase tracking-widest text-white/40">
                     no gps
                   </span>

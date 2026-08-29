@@ -27,6 +27,12 @@ export function GameClient() {
         </p>
       )}
 
+      {game.lobby && game.connection !== "open" && (
+        <p className="rounded-xl bg-amber-400/20 px-4 py-3 text-center text-sm font-bold text-amber-200">
+          Reconnecting to the game…
+        </p>
+      )}
+
       {game.lobby ? (
         <LobbyScreen
           lobby={game.lobby}

@@ -185,4 +185,74 @@ def test_leaving_updates_the_other_players():
             guest.receive_json()
             host.receive_json()
 
-        assert [p["name"] for p in host.receive_json()["players"]] == ["kal"]
+            guest.send_json({"type": "leave"})
+            assert [p["name"] for p in host.receive_json()["players"]] == ["kal"]
+
+
+def test_a_dropped_socket_leaves_the_runner_in_the_room():
+    with TestClient(app) as client, client.websocket_connect("/ws") as host:
+        host.send_json({"type": "create", "name": "kal"})
+        code = host.receive_json()["room"]
+        host.receive_json()
+
+        with client.websocket_connect("/ws") as guest:
+            guest.send_json({"type": "join", "room": code, "name": "sam"})
+            guest.receive_json()
+            guest.receive_json()
+            host.receive_json()
+
+        players = host.receive_json()["players"]
+        assert [(p["name"], p["connected"]) for p in players] == [
+            ("kal", True),
+            ("sam", False),
+        ]
+
+
+def test_rejoin_restores_the_runner_mid_round():
+    with TestClient(app) as client, client.websocket_connect("/ws") as host:
+        host.send_json({"type": "create", "name": "kal"})
+        joined = host.receive_json()
+        code = joined["room"]
+        host.receive_json()
+
+        with client.websocket_connect("/ws") as guest:
+            guest.send_json({"type": "join", "room": code, "name": "sam"})
+            guest_pid = guest.receive_json()["pid"]
+            guest.receive_json()
+            host.receive_json()
+
+            host.send_json(BOUNDS)
+            host.receive_json()
+            guest.receive_json()
+            host.send_json({"type": "start"})
+            host.receive_json()
+            host.receive_json()
+            guest.receive_json()
+            guest.receive_json()
+
+            guest.send_json({"type": "pos", "lat": 51.502, "lng": -0.118, "acc": 5, "t": 0})
+            guest.receive_json()
+            host.receive_json()
+
+        host.receive_json()  # guest marked offline
+
+        with client.websocket_connect("/ws") as back:
+            back.send_json({"type": "rejoin", "room": code, "pid": guest_pid})
+            assert back.receive_json() == {
+                "type": "joined",
+                "pid": guest_pid,
+                "room": code,
+                "color": PALETTE[1],
+            }
+            snapshot = back.receive_json()
+            sam = next(p for p in snapshot["players"] if p["pid"] == guest_pid)
+
+            assert snapshot["status"] == "running"
+            assert sam["connected"] is True
+            assert sam["trail"] == [[51.502, -0.118]]
+
+
+def test_rejoining_a_dead_room_errors():
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        ws.send_json({"type": "rejoin", "room": "ZZZZ", "pid": "deadbeef"})
+        assert ws.receive_json()["type"] == "error"

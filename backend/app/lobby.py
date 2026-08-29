@@ -155,14 +155,38 @@ class RoomRegistry:
         return room, player
 
     def leave(self, code: str, pid: str) -> Room | None:
-        """Remove a player, returning the room or None if it is now empty."""
+        """Remove a player for good, returning the room or None if it is now empty."""
         room = self.get(code)
         room.players.pop(pid, None)
-        if not room.players:
+        return self._settle(room, pid)
+
+    def disconnect(self, code: str, pid: str) -> Room | None:
+        """Park a player whose socket dropped so they can rejoin with the same pid.
+
+        Phones drop the socket constantly (screen lock, backgrounded tab, wifi to 5G), and
+        deleting the runner would throw away their trail and territory mid-round.
+        """
+        room = self.get(code)
+        player = room.players.get(pid)
+        if player is not None:
+            player.connected = False
+        return self._settle(room, pid)
+
+    def rejoin(self, code: str, pid: str) -> tuple[Room, Player]:
+        room = self.get(code)
+        player = room.players.get(pid)
+        if player is None:
+            raise LobbyError("you are no longer in that room")
+        player.connected = True
+        return room, player
+
+    def _settle(self, room: Room, gone_pid: str) -> Room | None:
+        """Drop the room once nobody is left on it, else keep the host reachable."""
+        if not any(player.connected for player in room.players.values()):
             del self._rooms[room.code]
             return None
-        if room.host_pid == pid:
-            room.host_pid = next(iter(room.players))
+        if room.host_pid == gone_pid:
+            room.host_pid = next(p.pid for p in room.players.values() if p.connected)
         return room
 
     def set_round_minutes(self, code: str, pid: str, minutes: int) -> Room:

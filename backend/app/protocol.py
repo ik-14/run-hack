@@ -61,6 +61,23 @@ class Join(BaseModel):
         return clean_name(value)
 
 
+class Rejoin(BaseModel):
+    """Reclaim an existing player after the socket dropped (phone lock, network switch)."""
+
+    type: Literal["rejoin"]
+    room: str
+    pid: str
+
+    @field_validator("room")
+    @classmethod
+    def _clean_room(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class Leave(BaseModel):
+    type: Literal["leave"]
+
+
 class Config(BaseModel):
     type: Literal["config"]
     round_minutes: int
@@ -97,7 +114,8 @@ class Pos(BaseModel):
 
 
 ClientMessage = Annotated[
-    Create | Join | Config | Bounds | Start | Pos, Field(discriminator="type")
+    Create | Join | Rejoin | Leave | Config | Bounds | Start | Pos,
+    Field(discriminator="type"),
 ]
 
 client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)

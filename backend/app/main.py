@@ -7,6 +7,7 @@ other in the lobby. Position, trail and territory handling come next.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -22,7 +23,9 @@ from app.protocol import (
     Config,
     Create,
     Join,
+    Leave,
     Pos,
+    Rejoin,
     Start,
     parse_client_message,
 )
@@ -48,6 +51,10 @@ class ConnectionManager:
 
     def add(self, code: str, pid: str, socket: WebSocket) -> None:
         self._sockets.setdefault(code, {})[pid] = socket
+
+    def holds(self, code: str, pid: str, socket: WebSocket) -> bool:
+        """True while this socket is still the live one for that player."""
+        return self._sockets.get(code, {}).get(pid) is socket
 
     def remove(self, code: str, pid: str) -> None:
         sockets = self._sockets.get(code)
@@ -96,15 +103,35 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 room, player = await _handle_entry(websocket, message)
                 continue
 
+            if isinstance(message, Leave):
+                await _depart(websocket, room, player, rooms.leave)
+                room, player = None, None
+                continue
+
             await _handle_lobby_message(websocket, room, player, message)
     except WebSocketDisconnect:
         pass
     finally:
         if room is not None and player is not None:
-            connections.remove(room.code, player.pid)
-            remaining = rooms.leave(room.code, player.pid)
-            if remaining is not None:
-                await connections.broadcast(remaining.code, remaining.snapshot())
+            await _depart(websocket, room, player, rooms.disconnect)
+
+
+async def _depart(
+    websocket: WebSocket,
+    room: Room,
+    player: Player,
+    release: Callable[[str, str], Room | None],
+) -> None:
+    # A reconnect can land before the dead socket unwinds; the newer one owns the player.
+    if not connections.holds(room.code, player.pid, websocket):
+        return
+    connections.remove(room.code, player.pid)
+    try:
+        remaining = release(room.code, player.pid)
+    except LobbyError:
+        return
+    if remaining is not None:
+        await connections.broadcast(remaining.code, remaining.snapshot())
 
 
 async def _handle_entry(
@@ -115,6 +142,12 @@ async def _handle_entry(
     elif isinstance(message, Join):
         try:
             room, player = rooms.join(message.room, message.name, message.color)
+        except LobbyError as exc:
+            await _send_error(websocket, str(exc))
+            return None, None
+    elif isinstance(message, Rejoin):
+        try:
+            room, player = rooms.rejoin(message.room, message.pid)
         except LobbyError as exc:
             await _send_error(websocket, str(exc))
             return None, None
