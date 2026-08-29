@@ -2,17 +2,18 @@
 
 import { FormEvent, useState } from "react";
 
-import { ROOM_CODE_LENGTH } from "@/lib/protocol";
+import { PALETTE, ROOM_CODE_LENGTH } from "@/lib/protocol";
 
 type Props = {
   busy: boolean;
-  onCreate: (name: string) => void;
-  onJoin: (room: string, name: string) => void;
+  onCreate: (name: string, color: string) => void;
+  onJoin: (room: string, name: string, color: string) => void;
 };
 
 export function HomeScreen({ busy, onCreate, onJoin }: Props) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [color, setColor] = useState<string>(PALETTE[0]);
 
   const trimmedName = name.trim();
   const canCreate = trimmedName.length > 0 && !busy;
@@ -20,7 +21,7 @@ export function HomeScreen({ busy, onCreate, onJoin }: Props) {
 
   const submitJoin = (event: FormEvent) => {
     event.preventDefault();
-    if (canJoin) onJoin(code, trimmedName);
+    if (canJoin) onJoin(code, trimmedName, color);
   };
 
   return (
@@ -46,10 +47,36 @@ export function HomeScreen({ busy, onCreate, onJoin }: Props) {
         />
       </label>
 
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-xs uppercase tracking-widest text-white/50">
+          Your colour
+        </legend>
+        <div className="grid grid-cols-8 gap-2">
+          {PALETTE.map((swatch) => (
+            <button
+              key={swatch}
+              type="button"
+              aria-label={`colour ${swatch}`}
+              aria-pressed={color === swatch}
+              onClick={() => setColor(swatch)}
+              style={{ backgroundColor: swatch }}
+              className={`aspect-square rounded-full transition ${
+                color === swatch
+                  ? "ring-2 ring-white ring-offset-2 ring-offset-[#0a0a0a]"
+                  : "opacity-70"
+              }`}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-white/40">
+          Someone already took it? You&apos;ll get the next free colour.
+        </p>
+      </fieldset>
+
       <button
         type="button"
         disabled={!canCreate}
-        onClick={() => onCreate(trimmedName)}
+        onClick={() => onCreate(trimmedName, color)}
         className="rounded-xl bg-lime-400 px-4 py-4 text-lg font-bold text-black disabled:opacity-40"
       >
         Create a room

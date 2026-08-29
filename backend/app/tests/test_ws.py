@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app, rooms
+from app.protocol import PALETTE
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +23,12 @@ def test_create_then_join_broadcasts_lobby():
         code = joined["room"]
         assert joined["type"] == "joined"
         assert host.receive_json()["players"] == [
-            {"pid": joined["pid"], "name": "kal", "connected": True}
+            {
+                "pid": joined["pid"],
+                "name": "kal",
+                "color": joined["color"],
+                "connected": True,
+            }
         ]
 
         with client.websocket_connect("/ws") as guest:
@@ -32,6 +38,33 @@ def test_create_then_join_broadcasts_lobby():
 
             assert [p["name"] for p in lobby["players"]] == ["kal", "sam"]
             assert lobby["host"] == joined["pid"]
+
+
+def test_unknown_colour_is_rejected():
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        ws.send_json({"type": "create", "name": "kal", "color": "#123456"})
+        assert ws.receive_json() == {
+            "type": "error",
+            "detail": "Value error, pick a colour from the palette",
+        }
+
+
+def test_players_get_distinct_colours():
+    with TestClient(app) as client, client.websocket_connect("/ws") as host:
+        host.send_json({"type": "create", "name": "kal", "color": PALETTE[0]})
+        joined = host.receive_json()
+        host.receive_json()
+
+        with client.websocket_connect("/ws") as guest:
+            guest.send_json(
+                {
+                    "type": "join",
+                    "room": joined["room"],
+                    "name": "sam",
+                    "color": PALETTE[0],
+                }
+            )
+            assert guest.receive_json()["color"] != PALETTE[0]
 
 
 def test_guest_cannot_start():

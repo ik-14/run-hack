@@ -1,6 +1,7 @@
 import pytest
 
 from app.lobby import MAX_PLAYERS, LobbyError, RoomRegistry
+from app.protocol import PALETTE
 
 
 def test_create_makes_host_the_only_player():
@@ -21,6 +22,27 @@ def test_join_is_case_insensitive_and_dedupes_names():
 
     assert second.name == "kal 2"
     assert len(room.players) == 2
+
+
+def test_requested_colour_is_honoured_once():
+    registry = RoomRegistry()
+    room, host = registry.create("kal", PALETTE[3])
+    _, guest = registry.join(room.code, "sam", PALETTE[3])
+
+    assert host.color == PALETTE[3]
+    assert guest.color != PALETTE[3]
+    assert guest.color in PALETTE
+
+
+def test_colours_are_unique_without_a_preference():
+    registry = RoomRegistry()
+    room, host = registry.create("host")
+    colors = {host.color}
+    for i in range(MAX_PLAYERS - 1):
+        _, player = registry.join(room.code, f"p{i}")
+        colors.add(player.color)
+
+    assert len(colors) == MAX_PLAYERS
 
 
 def test_join_unknown_room():

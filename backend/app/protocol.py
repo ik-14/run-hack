@@ -10,21 +10,45 @@ from pydantic import BaseModel, Field, TypeAdapter, field_validator
 MAX_NAME_LENGTH = 16
 ROUND_MINUTE_CHOICES = (5, 10, 20)
 
+# Fixed palette so no two players end up with near-identical shades (DESIGN.md §4).
+PALETTE = (
+    "#84cc16",
+    "#f97316",
+    "#06b6d4",
+    "#ec4899",
+    "#a855f7",
+    "#eab308",
+    "#ef4444",
+    "#22d3ee",
+)
+
 
 class Create(BaseModel):
     type: Literal["create"]
     name: str
+    color: str | None = None
 
     @field_validator("name")
     @classmethod
     def _clean_name(cls, value: str) -> str:
         return clean_name(value)
 
+    @field_validator("color")
+    @classmethod
+    def _check_color(cls, value: str | None) -> str | None:
+        return clean_color(value)
+
 
 class Join(BaseModel):
     type: Literal["join"]
     room: str
     name: str
+    color: str | None = None
+
+    @field_validator("color")
+    @classmethod
+    def _check_color(cls, value: str | None) -> str | None:
+        return clean_color(value)
 
     @field_validator("room")
     @classmethod
@@ -49,6 +73,15 @@ class Start(BaseModel):
 ClientMessage = Annotated[Create | Join | Config | Start, Field(discriminator="type")]
 
 client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
+
+
+def clean_color(value: str | None) -> str | None:
+    if value is None:
+        return None
+    color = value.strip().lower()
+    if color not in PALETTE:
+        raise ValueError("pick a colour from the palette")
+    return color
 
 
 def clean_name(value: str) -> str:

@@ -12,11 +12,11 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Literal
 
-from app.protocol import ROUND_MINUTE_CHOICES
+from app.protocol import PALETTE, ROUND_MINUTE_CHOICES
 
 ROOM_CODE_LENGTH = 4
 ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"
-MAX_PLAYERS = 8
+MAX_PLAYERS = len(PALETTE)
 DEFAULT_ROUND_MINUTES = 10
 
 RoomStatus = Literal["lobby", "running"]
@@ -30,6 +30,7 @@ class LobbyError(Exception):
 class Player:
     pid: str
     name: str
+    color: str
     connected: bool = True
 
 
@@ -49,7 +50,7 @@ class Room:
             "host": self.host_pid,
             "round_minutes": self.round_minutes,
             "players": [
-                {"pid": p.pid, "name": p.name, "connected": p.connected}
+                {"pid": p.pid, "name": p.name, "color": p.color, "connected": p.connected}
                 for p in self.players.values()
             ],
         }
@@ -69,20 +70,26 @@ class RoomRegistry:
             raise LobbyError(f"no room called {code.upper()}")
         return room
 
-    def create(self, name: str) -> tuple[Room, Player]:
+    def create(self, name: str, color: str | None = None) -> tuple[Room, Player]:
         code = self._new_code()
-        host = Player(pid=_new_pid(), name=name)
-        room = Room(code=code, host_pid=host.pid, players={host.pid: host})
+        room = Room(code=code, host_pid="")
+        host = Player(pid=_new_pid(), name=name, color=_pick_color(room, color))
+        room.host_pid = host.pid
+        room.players[host.pid] = host
         self._rooms[code] = room
         return room, host
 
-    def join(self, code: str, name: str) -> tuple[Room, Player]:
+    def join(self, code: str, name: str, color: str | None = None) -> tuple[Room, Player]:
         room = self.get(code)
         if room.status != "lobby":
             raise LobbyError("that round has already started")
         if len(room.players) >= MAX_PLAYERS:
             raise LobbyError(f"room {room.code} is full")
-        player = Player(pid=_new_pid(), name=self._unique_name(room, name))
+        player = Player(
+            pid=_new_pid(),
+            name=self._unique_name(room, name),
+            color=_pick_color(room, color),
+        )
         room.players[player.pid] = player
         return room, player
 
@@ -136,3 +143,14 @@ class RoomRegistry:
 
 def _new_pid() -> str:
     return uuid.uuid4().hex[:8]
+
+
+def _pick_color(room: Room, requested: str | None) -> str:
+    """Honour the requested swatch when it is still free, else hand out the next one."""
+    taken = {p.color for p in room.players.values()}
+    if requested is not None and requested not in taken:
+        return requested
+    for color in PALETTE:
+        if color not in taken:
+            return color
+    raise LobbyError(f"room {room.code} is full")

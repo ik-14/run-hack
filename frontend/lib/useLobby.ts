@@ -17,8 +17,8 @@ export type Lobby = {
   lobby: LobbyState | null;
   error: string | null;
   isHost: boolean;
-  createRoom: (name: string) => void;
-  joinRoom: (room: string, name: string) => void;
+  createRoom: (name: string, color: string) => void;
+  joinRoom: (room: string, name: string, color: string) => void;
   setRoundMinutes: (minutes: number) => void;
   start: () => void;
   leave: () => void;
@@ -93,9 +93,9 @@ export function useLobby(): Lobby {
     lobby,
     error,
     isHost: lobby !== null && pid !== null && lobby.host === pid,
-    createRoom: (name) => connect({ type: "create", name }),
-    joinRoom: (room, name) =>
-      connect({ type: "join", room: room.toUpperCase(), name }),
+    createRoom: (name, color) => connect({ type: "create", name, color }),
+    joinRoom: (room, name, color) =>
+      connect({ type: "join", room: room.toUpperCase(), name, color }),
     setRoundMinutes: (minutes) => send({ type: "config", round_minutes: minutes }),
     start: () => send({ type: "start" }),
     leave,

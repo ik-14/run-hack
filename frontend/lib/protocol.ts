@@ -3,6 +3,7 @@
 export type LobbyPlayer = {
   pid: string;
   name: string;
+  color: string;
   connected: boolean;
 };
 
@@ -16,19 +17,31 @@ export type LobbyState = {
 };
 
 export type ServerMessage =
-  | { type: "joined"; pid: string; room: string }
+  | { type: "joined"; pid: string; room: string; color: string }
   | LobbyState
   | { type: "started"; round_minutes: number }
   | { type: "error"; detail: string };
 
 export type ClientMessage =
-  | { type: "create"; name: string }
-  | { type: "join"; room: string; name: string }
+  | { type: "create"; name: string; color: string }
+  | { type: "join"; room: string; name: string; color: string }
   | { type: "config"; round_minutes: number }
   | { type: "start" };
 
 export const ROUND_MINUTE_CHOICES = [5, 10, 20] as const;
 export const ROOM_CODE_LENGTH = 4;
+
+/** Must stay in step with PALETTE in backend/app/protocol.py. */
+export const PALETTE = [
+  "#84cc16",
+  "#f97316",
+  "#06b6d4",
+  "#ec4899",
+  "#a855f7",
+  "#eab308",
+  "#ef4444",
+  "#22d3ee",
+] as const;
 
 export function serverUrl(): string {
   const configured = process.env.NEXT_PUBLIC_WS_URL;

@@ -14,7 +14,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from app.lobby import LobbyError, Player, Room, RoomRegistry
-from app.protocol import ROUND_MINUTE_CHOICES, Config, Create, Join, Start, parse_client_message
+from app.protocol import (
+    PALETTE,
+    ROUND_MINUTE_CHOICES,
+    Config,
+    Create,
+    Join,
+    Start,
+    parse_client_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +72,7 @@ async def health() -> dict[str, str]:
 
 @app.get("/api/config")
 async def config() -> dict[str, Any]:
-    return {"round_minute_choices": list(ROUND_MINUTE_CHOICES)}
+    return {"round_minute_choices": list(ROUND_MINUTE_CHOICES), "palette": list(PALETTE)}
 
 
 @app.websocket("/ws")
@@ -100,10 +108,10 @@ async def _handle_entry(
     websocket: WebSocket, message: Create | Join | Config | Start
 ) -> tuple[Room | None, Player | None]:
     if isinstance(message, Create):
-        room, player = rooms.create(message.name)
+        room, player = rooms.create(message.name, message.color)
     elif isinstance(message, Join):
         try:
-            room, player = rooms.join(message.room, message.name)
+            room, player = rooms.join(message.room, message.name, message.color)
         except LobbyError as exc:
             await _send_error(websocket, str(exc))
             return None, None
@@ -112,7 +120,9 @@ async def _handle_entry(
         return None, None
 
     connections.add(room.code, player.pid, websocket)
-    await websocket.send_json({"type": "joined", "pid": player.pid, "room": room.code})
+    await websocket.send_json(
+        {"type": "joined", "pid": player.pid, "room": room.code, "color": player.color}
+    )
     await connections.broadcast(room.code, room.snapshot())
     return room, player
 

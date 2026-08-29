@@ -49,7 +49,12 @@ export function LobbyScreen({
               key={player.pid}
               className="flex items-center justify-between px-4 py-3"
             >
-              <span className="text-lg">
+              <span className="flex items-center gap-3 text-lg">
+                <span
+                  aria-hidden
+                  style={{ backgroundColor: player.color }}
+                  className="h-4 w-4 rounded-full"
+                />
                 {player.name}
                 {player.pid === pid && (
                   <span className="text-white/40"> (you)</span>
