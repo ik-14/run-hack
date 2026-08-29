@@ -86,6 +86,7 @@ export function MapView({
   const mapRef = useRef<MapLibreMap | null>(null);
   const centredRef = useRef(false);
   const fittedRef = useRef<string | null>(null);
+  const fittedRunnersRef = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [preview, setPreview] = useState<Bounds | null>(null);
 
@@ -207,6 +208,30 @@ export function MapView({
       claimed.setData(territoryFeatures(players));
     }
   }, [players, ready]);
+
+  // Keep every runner who has a fix on screen: without this the camera sits on your own
+  // dot and a friend standing a few streets away is simply off the map.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || drawing || bounds) return;
+    const located = players.filter(
+      (player): player is LobbyPlayer & { lat: number; lng: number } =>
+        player.lat !== null && player.lng !== null,
+    );
+    if (located.length < 2) return;
+
+    // Only re-frame when the set of located runners changes, so panning isn't fought.
+    const key = located
+      .map((player) => player.pid)
+      .sort()
+      .join(",");
+    if (key === fittedRunnersRef.current) return;
+    fittedRunnersRef.current = key;
+
+    const box = new maplibregl.LngLatBounds();
+    for (const player of located) box.extend([player.lng, player.lat]);
+    map.fitBounds(box, { padding: 60, maxZoom: 16, duration: 500 });
+  }, [players, ready, drawing, bounds]);
 
   useEffect(() => {
     const map = mapRef.current;
