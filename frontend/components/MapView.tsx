@@ -157,6 +157,14 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => mapRef.current?.resize());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   // Snap to the runner once, when the first fix lands; after that the camera is theirs.
   useEffect(() => {
     const map = mapRef.current;
@@ -244,5 +252,11 @@ export function MapView({
     };
   }, [drawing, ready, onDrawn]);
 
-  return <div ref={containerRef} className={className} />;
+  // MapLibre owns the inner div's class attribute; Tailwind classes stay on the wrapper
+  // so React re-renders can never strip `maplibregl-map` and break the map's positioning.
+  return (
+    <div className={className}>
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
+  );
 }
