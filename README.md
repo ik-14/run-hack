@@ -24,4 +24,9 @@ See [DESIGN.md](./DESIGN.md) for the full design and implementation plan.
 
 Open `http://localhost:3000` on your phone (same network) or desktop.
 
+## Deploying
+
+Frontend on Vercel, game server on Render, both auto-deploying from `main`.
+See [DEPLOY.md](./DEPLOY.md).
+
 Ethan test
