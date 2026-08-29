@@ -27,5 +27,13 @@ def bounds_size_metres(bounds: Bounds) -> tuple[float, float]:
     return (bounds.east - bounds.west) * per_lng, (bounds.north - bounds.south) * per_lat
 
 
+def distance_metres(lat_a: float, lng_a: float, lat_b: float, lng_b: float) -> float:
+    """Flat-earth distance; fine over the few hundred metres a round spans."""
+    per_lng, per_lat = metres_per_degree((lat_a + lat_b) / 2)
+    dx = (lng_b - lng_a) * per_lng
+    dy = (lat_b - lat_a) * per_lat
+    return math.hypot(dx, dy)
+
+
 def contains(bounds: Bounds, lat: float, lng: float) -> bool:
     return bounds.south <= lat <= bounds.north and bounds.west <= lng <= bounds.east

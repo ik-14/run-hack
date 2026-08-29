@@ -1,10 +1,16 @@
 /** Mirror of the server protocol in backend/app/protocol.py (DESIGN.md §4). */
 
+/** A trail vertex, as [lat, lng]. */
+export type Point = [number, number];
+
 export type LobbyPlayer = {
   pid: string;
   name: string;
   color: string;
   connected: boolean;
+  lat: number | null;
+  lng: number | null;
+  trail: Point[];
 };
 
 export type Bounds = {
@@ -28,6 +34,13 @@ export type ServerMessage =
   | { type: "joined"; pid: string; room: string; color: string }
   | LobbyState
   | { type: "started"; round_minutes: number }
+  | {
+      type: "pos";
+      pid: string;
+      lat: number;
+      lng: number;
+      extend: boolean;
+    }
   | { type: "error"; detail: string };
 
 export type ClientMessage =
@@ -35,7 +48,8 @@ export type ClientMessage =
   | { type: "join"; room: string; name: string; color: string }
   | { type: "config"; round_minutes: number }
   | ({ type: "bounds" } & Bounds)
-  | { type: "start" };
+  | { type: "start" }
+  | { type: "pos"; lat: number; lng: number; acc: number; t: number };
 
 export const ROUND_MINUTE_CHOICES = [5, 10, 20] as const;
 export const ROOM_CODE_LENGTH = 4;

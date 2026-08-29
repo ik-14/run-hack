@@ -86,7 +86,19 @@ class Start(BaseModel):
     type: Literal["start"]
 
 
-ClientMessage = Annotated[Create | Join | Config | Bounds | Start, Field(discriminator="type")]
+class Pos(BaseModel):
+    """A GPS fix streamed from a running phone (DESIGN.md §4)."""
+
+    type: Literal["pos"]
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    acc: float = Field(default=0.0, ge=0)
+    t: float = 0.0
+
+
+ClientMessage = Annotated[
+    Create | Join | Config | Bounds | Start | Pos, Field(discriminator="type")
+]
 
 client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
 

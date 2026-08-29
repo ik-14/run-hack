@@ -22,6 +22,7 @@ from app.protocol import (
     Config,
     Create,
     Join,
+    Pos,
     Start,
     parse_client_message,
 )
@@ -139,6 +140,18 @@ async def _handle_lobby_message(
         elif isinstance(message, Bounds):
             updated = rooms.set_bounds(room.code, player.pid, message)
             await connections.broadcast(room.code, updated.snapshot())
+        elif isinstance(message, Pos):
+            moved, extended = rooms.record_position(room.code, player.pid, message)
+            await connections.broadcast(
+                room.code,
+                {
+                    "type": "pos",
+                    "pid": moved.pid,
+                    "lat": moved.lat,
+                    "lng": moved.lng,
+                    "extend": extended,
+                },
+            )
         elif isinstance(message, Start):
             updated = rooms.start(room.code, player.pid)
             await connections.broadcast(room.code, updated.snapshot())

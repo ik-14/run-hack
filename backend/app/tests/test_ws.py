@@ -28,6 +28,9 @@ def test_create_then_join_broadcasts_lobby():
                 "name": "kal",
                 "color": joined["color"],
                 "connected": True,
+                "lat": None,
+                "lng": None,
+                "trail": [],
             }
         ]
 
@@ -130,6 +133,25 @@ def test_inverted_rectangle_is_rejected():
 
         host.send_json({**BOUNDS, "north": 51.4})
         assert "positive width" in host.receive_json()["detail"]
+
+
+def test_positions_are_broadcast_to_the_room():
+    with TestClient(app) as client, client.websocket_connect("/ws") as host:
+        host.send_json({"type": "create", "name": "kal"})
+        host.receive_json()
+        host.receive_json()
+        host.send_json(BOUNDS)
+        host.receive_json()
+        host.send_json({"type": "start"})
+        host.receive_json()
+        host.receive_json()
+
+        host.send_json({"type": "pos", "lat": 51.502, "lng": -0.118, "acc": 5, "t": 0})
+        update = host.receive_json()
+
+        assert update["type"] == "pos"
+        assert (update["lat"], update["lng"]) == (51.502, -0.118)
+        assert update["extend"] is True
 
 
 def test_joining_missing_room_errors():

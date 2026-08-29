@@ -1,7 +1,7 @@
 import pytest
 
 from app.lobby import MAX_PLAYERS, LobbyError, RoomRegistry
-from app.protocol import PALETTE, Bounds
+from app.protocol import PALETTE, Bounds, Pos
 
 
 def a_rectangle(side_deg: float = 0.005) -> Bounds:
@@ -113,6 +113,56 @@ def test_only_host_can_start_or_configure():
         registry.set_round_minutes(room.code, guest.pid, 5)
     with pytest.raises(LobbyError, match="only the host"):
         registry.set_bounds(room.code, guest.pid, a_rectangle())
+
+
+def a_fix(lat: float, lng: float, seconds: float = 0.0) -> Pos:
+    return Pos(type="pos", lat=lat, lng=lng, acc=5.0, t=seconds * 1000)
+
+
+def test_trail_only_grows_once_the_round_is_running():
+    registry = RoomRegistry()
+    room, host = registry.create("kal")
+    registry.set_bounds(room.code, host.pid, a_rectangle())
+
+    _, extended = registry.record_position(room.code, host.pid, a_fix(51.501, -0.119))
+    assert extended is False
+    assert host.trail == []
+    assert host.lat == 51.501
+
+    registry.start(room.code, host.pid)
+    _, extended = registry.record_position(room.code, host.pid, a_fix(51.501, -0.119))
+    assert extended is True
+    assert len(host.trail) == 1
+
+
+def test_jitter_does_not_add_vertices_but_real_steps_do():
+    registry = RoomRegistry()
+    room, host = registry.create("kal")
+    registry.set_bounds(room.code, host.pid, a_rectangle())
+    registry.start(room.code, host.pid)
+
+    registry.record_position(room.code, host.pid, a_fix(51.501, -0.119, 0))
+    # ~1 m away: jitter.
+    registry.record_position(room.code, host.pid, a_fix(51.501009, -0.119, 5))
+    assert len(host.trail) == 1
+
+    # ~22 m away: a real step.
+    registry.record_position(room.code, host.pid, a_fix(51.5012, -0.119, 10))
+    assert len(host.trail) == 2
+
+
+def test_teleporting_fixes_are_ignored():
+    registry = RoomRegistry()
+    room, host = registry.create("kal")
+    registry.set_bounds(room.code, host.pid, a_rectangle())
+    registry.start(room.code, host.pid)
+
+    registry.record_position(room.code, host.pid, a_fix(51.501, -0.119, 0))
+    _, extended = registry.record_position(room.code, host.pid, a_fix(51.9, -0.119, 5))
+
+    assert extended is False
+    assert len(host.trail) == 1
+    assert host.lat == 51.501
 
 
 def test_round_length_must_be_a_choice():

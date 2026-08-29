@@ -12,8 +12,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Literal
 
-from app.geo import bounds_size_metres
-from app.protocol import PALETTE, ROUND_MINUTE_CHOICES, Bounds
+from app.geo import bounds_size_metres, distance_metres
+from app.protocol import PALETTE, ROUND_MINUTE_CHOICES, Bounds, Pos
 
 ROOM_CODE_LENGTH = 4
 ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -21,6 +21,13 @@ MAX_PLAYERS = len(PALETTE)
 DEFAULT_ROUND_MINUTES = 10
 MIN_PLAY_AREA_SIDE_M = 50.0
 MAX_PLAY_AREA_SIDE_M = 5000.0
+# A fix has to move this far before it earns a new trail vertex, which keeps GPS jitter
+# from turning a standing runner into a scribble.
+MIN_TRAIL_STEP_M = 5.0
+# Faster than a sprinter: treat anything above this as a GPS glitch (DESIGN.md §6).
+MAX_SPEED_MPS = 12.0
+# Phones can report fixes back to back, so the speed check assumes at least this gap.
+MIN_FIX_GAP_S = 2.0
 
 RoomStatus = Literal["lobby", "running"]
 
@@ -35,6 +42,23 @@ class Player:
     name: str
     color: str
     connected: bool = True
+    lat: float | None = None
+    lng: float | None = None
+    # Device clock (ms) of the last accepted fix, used for the speed sanity check.
+    seen_at: float | None = None
+    # The live streak, as [lat, lng] vertices, since the round started.
+    trail: list[tuple[float, float]] = field(default_factory=list[tuple[float, float]])
+
+    def state(self) -> dict[str, object]:
+        return {
+            "pid": self.pid,
+            "name": self.name,
+            "color": self.color,
+            "connected": self.connected,
+            "lat": self.lat,
+            "lng": self.lng,
+            "trail": [list(point) for point in self.trail],
+        }
 
 
 @dataclass
@@ -54,10 +78,7 @@ class Room:
             "host": self.host_pid,
             "round_minutes": self.round_minutes,
             "bounds": None if self.bounds is None else self.bounds.model_dump(exclude={"type"}),
-            "players": [
-                {"pid": p.pid, "name": p.name, "color": p.color, "connected": p.connected}
-                for p in self.players.values()
-            ],
+            "players": [p.state() for p in self.players.values()],
         }
 
 
@@ -136,7 +157,32 @@ class RoomRegistry:
         if room.bounds is None:
             raise LobbyError("draw the play area on the map first")
         room.status = "running"
+        for player in room.players.values():
+            player.trail.clear()
         return room
+
+    def record_position(self, code: str, pid: str, pos: Pos) -> tuple[Player, bool]:
+        """Store a fix, returning the player and whether the trail grew a vertex."""
+        room = self.get(code)
+        player = room.players.get(pid)
+        if player is None:
+            raise LobbyError("you are not in that room")
+
+        if player.lat is not None and player.lng is not None and player.seen_at is not None:
+            moved = distance_metres(player.lat, player.lng, pos.lat, pos.lng)
+            elapsed = max((pos.t - player.seen_at) / 1000.0, MIN_FIX_GAP_S)
+            if moved / elapsed > MAX_SPEED_MPS:
+                return player, False
+
+        player.lat, player.lng, player.seen_at = pos.lat, pos.lng, pos.t
+        if room.status != "running":
+            return player, False
+
+        tail = player.trail[-1] if player.trail else None
+        if tail is None or distance_metres(tail[0], tail[1], pos.lat, pos.lng) >= MIN_TRAIL_STEP_M:
+            player.trail.append((pos.lat, pos.lng))
+            return player, True
+        return player, False
 
     def _host_room(self, code: str, pid: str) -> Room:
         room = self.get(code)

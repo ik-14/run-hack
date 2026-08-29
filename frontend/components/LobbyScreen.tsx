@@ -60,7 +60,7 @@ export function LobbyScreen({
       <section className="space-y-2">
         <div className="flex items-baseline justify-between">
           <h2 className="text-xs uppercase tracking-widest text-white/50">
-            Play area
+            {lobby.status === "running" ? "Live map" : "Play area"}
           </h2>
           {size && (
             <span className="text-xs text-white/50">
@@ -70,12 +70,15 @@ export function LobbyScreen({
         </div>
         <MapView
           bounds={lobby.bounds}
+          players={lobby.players}
           center={fix}
           drawing={drawing}
           onDrawn={handleDrawn}
-          className="h-64 w-full overflow-hidden rounded-xl"
+          className={`w-full overflow-hidden rounded-xl ${
+            lobby.status === "running" ? "h-80" : "h-64"
+          }`}
         />
-        {isHost ? (
+        {lobby.status === "running" ? null : isHost ? (
           <button
             onClick={() => setDrawing((on) => !on)}
             className={`w-full rounded-xl px-4 py-3 text-sm font-bold ${

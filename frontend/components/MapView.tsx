@@ -6,7 +6,7 @@ import maplibregl, { LngLat, Map as MapLibreMap, StyleSpecification } from "mapl
 import { useEffect, useRef, useState } from "react";
 
 import { boundsFromCorners, boundsToPolygon } from "@/lib/geo";
-import type { Bounds } from "@/lib/protocol";
+import type { Bounds, LobbyPlayer } from "@/lib/protocol";
 
 const OSM_STYLE: StyleSpecification = {
   version: 8,
@@ -23,8 +23,33 @@ const OSM_STYLE: StyleSpecification = {
 
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
+function playerFeatures(players: LobbyPlayer[]): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  for (const player of players) {
+    if (player.trail.length > 1) {
+      features.push({
+        type: "Feature",
+        properties: { color: player.color },
+        geometry: {
+          type: "LineString",
+          coordinates: player.trail.map(([lat, lng]) => [lng, lat]),
+        },
+      });
+    }
+    if (player.lat !== null && player.lng !== null) {
+      features.push({
+        type: "Feature",
+        properties: { color: player.color, name: player.name },
+        geometry: { type: "Point", coordinates: [player.lng, player.lat] },
+      });
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
 type Props = {
   bounds: Bounds | null;
+  players?: LobbyPlayer[];
   center: { lat: number; lng: number } | null;
   /** When true, dragging on the map rubber-bands the play-area rectangle. */
   drawing?: boolean;
@@ -32,10 +57,18 @@ type Props = {
   className?: string;
 };
 
-export function MapView({ bounds, center, drawing = false, onDrawn, className }: Props) {
+export function MapView({
+  bounds,
+  players = [],
+  center,
+  drawing = false,
+  onDrawn,
+  className,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const centredRef = useRef(false);
+  const fittedRef = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [preview, setPreview] = useState<Bounds | null>(null);
 
@@ -63,6 +96,27 @@ export function MapView({ bounds, center, drawing = false, onDrawn, className }:
         source: "bounds",
         paint: { "line-color": "#84cc16", "line-width": 3, "line-dasharray": [2, 1] },
       });
+      map.addSource("players", { type: "geojson", data: EMPTY });
+      map.addLayer({
+        id: "trails",
+        type: "line",
+        source: "players",
+        filter: ["==", ["geometry-type"], "LineString"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": ["get", "color"], "line-width": 5, "line-opacity": 0.9 },
+      });
+      map.addLayer({
+        id: "runners",
+        type: "circle",
+        source: "players",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 7,
+          "circle-color": ["get", "color"],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#0a0a0a",
+        },
+      });
       setReady(true);
     });
     return () => {
@@ -88,7 +142,11 @@ export function MapView({ bounds, center, drawing = false, onDrawn, className }:
     if (!(source instanceof maplibregl.GeoJSONSource)) return;
     const shown = preview ?? bounds;
     source.setData(shown ? boundsToPolygon(shown) : EMPTY);
-    if (!preview && bounds) {
+
+    const key = bounds ? JSON.stringify(bounds) : null;
+    const isNew = key !== fittedRef.current;
+    fittedRef.current = key;
+    if (!preview && bounds && isNew) {
       map.fitBounds(
         [
           [bounds.west, bounds.south],
@@ -98,6 +156,15 @@ export function MapView({ bounds, center, drawing = false, onDrawn, className }:
       );
     }
   }, [bounds, preview, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const source = map.getSource("players");
+    if (source instanceof maplibregl.GeoJSONSource) {
+      source.setData(playerFeatures(players));
+    }
+  }, [players, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -6,6 +6,7 @@ import {
   Bounds,
   ClientMessage,
   LobbyState,
+  Point,
   ServerMessage,
   serverUrl,
 } from "@/lib/protocol";
@@ -22,9 +23,30 @@ export type Lobby = {
   joinRoom: (room: string, name: string, color: string) => void;
   setRoundMinutes: (minutes: number) => void;
   setBounds: (bounds: Bounds) => void;
+  sendPosition: (fix: { lat: number; lng: number; acc: number; t: number }) => void;
   start: () => void;
   leave: () => void;
 };
+
+type PositionUpdate = Extract<ServerMessage, { type: "pos" }>;
+
+function applyPosition(lobby: LobbyState, update: PositionUpdate): LobbyState {
+  return {
+    ...lobby,
+    players: lobby.players.map((player) =>
+      player.pid === update.pid
+        ? {
+            ...player,
+            lat: update.lat,
+            lng: update.lng,
+            trail: update.extend
+              ? [...player.trail, [update.lat, update.lng] as Point]
+              : player.trail,
+          }
+        : player,
+    ),
+  };
+}
 
 export function useLobby(): Lobby {
   const socketRef = useRef<WebSocket | null>(null);
@@ -65,6 +87,8 @@ export function useLobby(): Lobby {
           setPid(message.pid);
         } else if (message.type === "lobby") {
           setLobby(message);
+        } else if (message.type === "pos") {
+          setLobby((prev) => (prev ? applyPosition(prev, message) : prev));
         } else if (message.type === "error") {
           setError(message.detail);
         }
@@ -76,6 +100,12 @@ export function useLobby(): Lobby {
       socket.onerror = () => setError("could not reach the game server");
     },
     [],
+  );
+
+  const sendPosition = useCallback(
+    (fix: { lat: number; lng: number; acc: number; t: number }) =>
+      send({ type: "pos", ...fix }),
+    [send],
   );
 
   const leave = useCallback(() => {
@@ -100,6 +130,7 @@ export function useLobby(): Lobby {
       connect({ type: "join", room: room.toUpperCase(), name, color }),
     setRoundMinutes: (minutes) => send({ type: "config", round_minutes: minutes }),
     setBounds: (bounds) => send({ type: "bounds", ...bounds }),
+    sendPosition,
     start: () => send({ type: "start" }),
     leave,
   };
