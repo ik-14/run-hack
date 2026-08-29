@@ -5,6 +5,7 @@ description = "Runner.io realtime game server"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
+    "shapely>=2.1.2",
     "uvicorn[standard]>=0.32.0",
     "websockets>=13.1",
 ]

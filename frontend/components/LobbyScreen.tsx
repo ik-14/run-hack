@@ -13,6 +13,8 @@ type Props = {
   isHost: boolean;
   fix: Fix | null;
   gpsError: string | null;
+  lastClaim: { pid: string; area_m2: number } | null;
+  outOfBounds: { graceLeftS: number; disqualified: boolean } | null;
   onRoundMinutes: (minutes: number) => void;
   onBounds: (bounds: Bounds) => void;
   onStart: () => void;
@@ -25,6 +27,8 @@ export function LobbyScreen({
   isHost,
   fix,
   gpsError,
+  lastClaim,
+  outOfBounds,
   onRoundMinutes,
   onBounds,
   onStart,
@@ -41,9 +45,21 @@ export function LobbyScreen({
   );
 
   const size = lobby.bounds ? boundsSizeMetres(lobby.bounds) : null;
+  const claimer = lastClaim && lobby.players.find((p) => p.pid === lastClaim.pid);
 
   return (
     <div className="flex flex-col gap-5">
+      {outOfBounds && (
+        <p
+          className={`rounded-xl px-4 py-4 text-center text-lg font-black ${
+            outOfBounds.disqualified ? "bg-red-600 text-white" : "bg-amber-400 text-black"
+          }`}
+        >
+          {outOfBounds.disqualified
+            ? "Disqualified — you stayed outside the play area"
+            : `Out of bounds! Get back in within ${outOfBounds.graceLeftS.toFixed(0)}s`}
+        </p>
+      )}
       <header className="space-y-1">
         <button
           onClick={onLeave}
@@ -101,6 +117,12 @@ export function LobbyScreen({
         {gpsError && (
           <p className="text-xs text-amber-300">GPS: {gpsError}</p>
         )}
+        {claimer && lastClaim && (
+          <p className="text-sm font-bold" style={{ color: claimer.color }}>
+            {claimer.pid === pid ? "You" : claimer.name} closed a loop —{" "}
+            {lastClaim.area_m2.toFixed(0)} m² held
+          </p>
+        )}
       </section>
 
       <section className="space-y-2">
@@ -121,7 +143,20 @@ export function LobbyScreen({
                 />
                 {player.name}
                 {player.pid === pid && <span className="text-white/40"> (you)</span>}
+                {player.disqualified && (
+                  <span className="text-xs uppercase tracking-widest text-red-400">out</span>
+                )}
+                {!player.disqualified && player.outside && (
+                  <span className="text-xs uppercase tracking-widest text-amber-300">
+                    outside
+                  </span>
+                )}
               </span>
+              {player.area_m2 > 0 && (
+                <span className="font-mono text-sm text-white/70">
+                  {player.area_m2.toFixed(0)} m²
+                </span>
+              )}
               {player.pid === lobby.host && (
                 <span className="rounded-full bg-lime-400/20 px-2 py-1 text-xs uppercase tracking-widest text-lime-300">
                   host

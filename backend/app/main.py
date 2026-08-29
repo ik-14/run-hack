@@ -141,17 +141,35 @@ async def _handle_lobby_message(
             updated = rooms.set_bounds(room.code, player.pid, message)
             await connections.broadcast(room.code, updated.snapshot())
         elif isinstance(message, Pos):
-            moved, extended = rooms.record_position(room.code, player.pid, message)
+            fix = rooms.record_position(room.code, player.pid, message)
             await connections.broadcast(
                 room.code,
                 {
                     "type": "pos",
-                    "pid": moved.pid,
-                    "lat": moved.lat,
-                    "lng": moved.lng,
-                    "extend": extended,
+                    "pid": fix.player.pid,
+                    "lat": fix.player.lat,
+                    "lng": fix.player.lng,
+                    "extend": fix.extended,
                 },
             )
+            if fix.grace_left_s is not None or fix.returned:
+                await connections.broadcast(
+                    room.code,
+                    {
+                        "type": "oob",
+                        "pid": fix.player.pid,
+                        "grace_left_s": fix.grace_left_s,
+                        "disqualified": fix.disqualified,
+                    },
+                )
+            if fix.disqualified:
+                await connections.broadcast(room.code, rooms.get(room.code).snapshot())
+            if fix.claimed_m2 is not None:
+                await connections.broadcast(
+                    room.code,
+                    {"type": "claim", "pid": fix.player.pid, "area_m2": fix.claimed_m2},
+                )
+                await connections.broadcast(room.code, rooms.get(room.code).snapshot())
         elif isinstance(message, Start):
             updated = rooms.start(room.code, player.pid)
             await connections.broadcast(room.code, updated.snapshot())

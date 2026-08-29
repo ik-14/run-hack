@@ -124,14 +124,12 @@ def test_trail_only_grows_once_the_round_is_running():
     room, host = registry.create("kal")
     registry.set_bounds(room.code, host.pid, a_rectangle())
 
-    _, extended = registry.record_position(room.code, host.pid, a_fix(51.501, -0.119))
-    assert extended is False
+    assert registry.record_position(room.code, host.pid, a_fix(51.501, -0.119)).extended is False
     assert host.trail == []
     assert host.lat == 51.501
 
     registry.start(room.code, host.pid)
-    _, extended = registry.record_position(room.code, host.pid, a_fix(51.501, -0.119))
-    assert extended is True
+    assert registry.record_position(room.code, host.pid, a_fix(51.501, -0.119)).extended is True
     assert len(host.trail) == 1
 
 
@@ -158,9 +156,9 @@ def test_teleporting_fixes_are_ignored():
     registry.start(room.code, host.pid)
 
     registry.record_position(room.code, host.pid, a_fix(51.501, -0.119, 0))
-    _, extended = registry.record_position(room.code, host.pid, a_fix(51.9, -0.119, 5))
+    fix = registry.record_position(room.code, host.pid, a_fix(51.9, -0.119, 5))
 
-    assert extended is False
+    assert fix.extended is False
     assert len(host.trail) == 1
     assert host.lat == 51.501
 
