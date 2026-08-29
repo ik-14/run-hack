@@ -34,6 +34,7 @@ export function GameClient() {
           isHost={game.isHost}
           fix={fix}
           gpsError={gpsError}
+          lastClaim={game.lastClaim}
           onRoundMinutes={game.setRoundMinutes}
           onBounds={game.setBounds}
           onStart={game.start}

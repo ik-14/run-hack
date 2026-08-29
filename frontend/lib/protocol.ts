@@ -11,6 +11,9 @@ export type LobbyPlayer = {
   lat: number | null;
   lng: number | null;
   trail: Point[];
+  /** Claimed ground: one closed ring of [lat, lng] per owned area. */
+  territory: Point[][];
+  area_m2: number;
 };
 
 export type Bounds = {
@@ -41,6 +44,7 @@ export type ServerMessage =
       lng: number;
       extend: boolean;
     }
+  | { type: "claim"; pid: string; area_m2: number }
   | { type: "error"; detail: string };
 
 export type ClientMessage =

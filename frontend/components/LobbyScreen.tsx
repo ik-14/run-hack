@@ -13,6 +13,7 @@ type Props = {
   isHost: boolean;
   fix: Fix | null;
   gpsError: string | null;
+  lastClaim: { pid: string; area_m2: number } | null;
   onRoundMinutes: (minutes: number) => void;
   onBounds: (bounds: Bounds) => void;
   onStart: () => void;
@@ -25,6 +26,7 @@ export function LobbyScreen({
   isHost,
   fix,
   gpsError,
+  lastClaim,
   onRoundMinutes,
   onBounds,
   onStart,
@@ -41,6 +43,7 @@ export function LobbyScreen({
   );
 
   const size = lobby.bounds ? boundsSizeMetres(lobby.bounds) : null;
+  const claimer = lastClaim && lobby.players.find((p) => p.pid === lastClaim.pid);
 
   return (
     <div className="flex flex-col gap-5">
@@ -101,6 +104,12 @@ export function LobbyScreen({
         {gpsError && (
           <p className="text-xs text-amber-300">GPS: {gpsError}</p>
         )}
+        {claimer && lastClaim && (
+          <p className="text-sm font-bold" style={{ color: claimer.color }}>
+            {claimer.pid === pid ? "You" : claimer.name} closed a loop —{" "}
+            {lastClaim.area_m2.toFixed(0)} m² held
+          </p>
+        )}
       </section>
 
       <section className="space-y-2">
@@ -122,6 +131,11 @@ export function LobbyScreen({
                 {player.name}
                 {player.pid === pid && <span className="text-white/40"> (you)</span>}
               </span>
+              {player.area_m2 > 0 && (
+                <span className="font-mono text-sm text-white/70">
+                  {player.area_m2.toFixed(0)} m²
+                </span>
+              )}
               {player.pid === lobby.host && (
                 <span className="rounded-full bg-lime-400/20 px-2 py-1 text-xs uppercase tracking-widest text-lime-300">
                   host

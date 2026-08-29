@@ -31,6 +31,8 @@ def test_create_then_join_broadcasts_lobby():
                 "lat": None,
                 "lng": None,
                 "trail": [],
+                "territory": [],
+                "area_m2": 0.0,
             }
         ]
 

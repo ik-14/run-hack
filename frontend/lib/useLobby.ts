@@ -18,6 +18,8 @@ export type Lobby = {
   pid: string | null;
   lobby: LobbyState | null;
   error: string | null;
+  /** The most recent loop closure, for the claim banner. */
+  lastClaim: { pid: string; area_m2: number } | null;
   isHost: boolean;
   createRoom: (name: string, color: string) => void;
   joinRoom: (room: string, name: string, color: string) => void;
@@ -55,6 +57,7 @@ export function useLobby(): Lobby {
   const [pid, setPid] = useState<string | null>(null);
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastClaim, setLastClaim] = useState<{ pid: string; area_m2: number } | null>(null);
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -89,6 +92,8 @@ export function useLobby(): Lobby {
           setLobby(message);
         } else if (message.type === "pos") {
           setLobby((prev) => (prev ? applyPosition(prev, message) : prev));
+        } else if (message.type === "claim") {
+          setLastClaim({ pid: message.pid, area_m2: message.area_m2 });
         } else if (message.type === "error") {
           setError(message.detail);
         }
@@ -115,6 +120,7 @@ export function useLobby(): Lobby {
     setPid(null);
     setLobby(null);
     setError(null);
+    setLastClaim(null);
   }, []);
 
   useEffect(() => () => socketRef.current?.close(), []);
@@ -124,6 +130,7 @@ export function useLobby(): Lobby {
     pid,
     lobby,
     error,
+    lastClaim,
     isHost: lobby !== null && pid !== null && lobby.host === pid,
     createRoom: (name, color) => connect({ type: "create", name, color }),
     joinRoom: (room, name, color) =>

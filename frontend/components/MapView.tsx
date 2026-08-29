@@ -47,6 +47,23 @@ function playerFeatures(players: LobbyPlayer[]): GeoJSON.FeatureCollection {
   return { type: "FeatureCollection", features };
 }
 
+function territoryFeatures(players: LobbyPlayer[]): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  for (const player of players) {
+    for (const ring of player.territory) {
+      features.push({
+        type: "Feature",
+        properties: { color: player.color },
+        geometry: {
+          type: "Polygon",
+          coordinates: [ring.map(([lat, lng]) => [lng, lat])],
+        },
+      });
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
 type Props = {
   bounds: Bounds | null;
   players?: LobbyPlayer[];
@@ -95,6 +112,19 @@ export function MapView({
         type: "line",
         source: "bounds",
         paint: { "line-color": "#84cc16", "line-width": 3, "line-dasharray": [2, 1] },
+      });
+      map.addSource("territory", { type: "geojson", data: EMPTY });
+      map.addLayer({
+        id: "territory-fill",
+        type: "fill",
+        source: "territory",
+        paint: { "fill-color": ["get", "color"], "fill-opacity": 0.45 },
+      });
+      map.addLayer({
+        id: "territory-line",
+        type: "line",
+        source: "territory",
+        paint: { "line-color": ["get", "color"], "line-width": 2 },
       });
       map.addSource("players", { type: "geojson", data: EMPTY });
       map.addLayer({
@@ -163,6 +193,10 @@ export function MapView({
     const source = map.getSource("players");
     if (source instanceof maplibregl.GeoJSONSource) {
       source.setData(playerFeatures(players));
+    }
+    const claimed = map.getSource("territory");
+    if (claimed instanceof maplibregl.GeoJSONSource) {
+      claimed.setData(territoryFeatures(players));
     }
   }, [players, ready]);
 

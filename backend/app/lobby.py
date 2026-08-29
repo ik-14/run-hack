@@ -12,6 +12,9 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Literal
 
+from shapely.geometry.base import BaseGeometry
+
+from app import territory
 from app.geo import bounds_size_metres, distance_metres
 from app.protocol import PALETTE, ROUND_MINUTE_CHOICES, Bounds, Pos
 
@@ -37,6 +40,16 @@ class LobbyError(Exception):
 
 
 @dataclass
+class FixResult:
+    """What a GPS fix did: moved the dot, maybe grew the trail, maybe claimed ground."""
+
+    player: Player
+    extended: bool = False
+    # The player's total territory in m² when this fix closed a loop, else None.
+    claimed_m2: float | None = None
+
+
+@dataclass
 class Player:
     pid: str
     name: str
@@ -48,8 +61,10 @@ class Player:
     seen_at: float | None = None
     # The live streak, as [lat, lng] vertices, since the round started.
     trail: list[tuple[float, float]] = field(default_factory=list[tuple[float, float]])
+    # Ground this player owns, in lat/lng degrees.
+    land: BaseGeometry | None = None
 
-    def state(self) -> dict[str, object]:
+    def state(self, latitude: float) -> dict[str, object]:
         return {
             "pid": self.pid,
             "name": self.name,
@@ -58,6 +73,8 @@ class Player:
             "lat": self.lat,
             "lng": self.lng,
             "trail": [list(point) for point in self.trail],
+            "territory": [[list(point) for point in ring] for ring in territory.rings(self.land)],
+            "area_m2": round(territory.area_m2(self.land, latitude), 1),
         }
 
 
@@ -78,8 +95,13 @@ class Room:
             "host": self.host_pid,
             "round_minutes": self.round_minutes,
             "bounds": None if self.bounds is None else self.bounds.model_dump(exclude={"type"}),
-            "players": [p.state() for p in self.players.values()],
+            "players": [p.state(self.centre_lat) for p in self.players.values()],
         }
+
+    @property
+    def centre_lat(self) -> float:
+        """Latitude the local metre scale is computed at."""
+        return 0.0 if self.bounds is None else (self.bounds.south + self.bounds.north) / 2
 
 
 class RoomRegistry:
@@ -159,30 +181,59 @@ class RoomRegistry:
         room.status = "running"
         for player in room.players.values():
             player.trail.clear()
+            player.land = None
         return room
 
-    def record_position(self, code: str, pid: str, pos: Pos) -> tuple[Player, bool]:
-        """Store a fix, returning the player and whether the trail grew a vertex."""
+    def record_position(self, code: str, pid: str, pos: Pos) -> FixResult:
+        """Store a fix, extending the trail and claiming ground when a loop closes."""
         room = self.get(code)
         player = room.players.get(pid)
         if player is None:
             raise LobbyError("you are not in that room")
+        result = FixResult(player=player)
 
         if player.lat is not None and player.lng is not None and player.seen_at is not None:
             moved = distance_metres(player.lat, player.lng, pos.lat, pos.lng)
             elapsed = max((pos.t - player.seen_at) / 1000.0, MIN_FIX_GAP_S)
             if moved / elapsed > MAX_SPEED_MPS:
-                return player, False
+                return result
 
         player.lat, player.lng, player.seen_at = pos.lat, pos.lng, pos.t
         if room.status != "running":
-            return player, False
+            return result
 
         tail = player.trail[-1] if player.trail else None
-        if tail is None or distance_metres(tail[0], tail[1], pos.lat, pos.lng) >= MIN_TRAIL_STEP_M:
-            player.trail.append((pos.lat, pos.lng))
-            return player, True
-        return player, False
+        if (
+            tail is not None
+            and distance_metres(tail[0], tail[1], pos.lat, pos.lng) < MIN_TRAIL_STEP_M
+        ):
+            return result
+
+        player.trail.append((pos.lat, pos.lng))
+        result.extended = True
+        result.claimed_m2 = self._try_claim(room, player)
+        return result
+
+    def _try_claim(self, room: Room, player: Player) -> float | None:
+        """Close the streak into territory, taking any overlap off the other players."""
+        closed = territory.find_loop(player.trail)
+        if closed is None:
+            return None
+        ring, leftover = closed
+        claim = territory.ring_to_polygon(ring)
+        if claim is None:
+            return None
+
+        gained = territory.area_m2(claim, room.centre_lat)
+        if gained < territory.MIN_CLAIM_M2:
+            return None
+
+        player.trail = leftover
+        player.land = territory.add(player.land, claim)
+        for rival in room.players.values():
+            if rival.pid != player.pid:
+                rival.land = territory.take_from(rival.land, claim)
+        return round(territory.area_m2(player.land, room.centre_lat), 1)
 
     def _host_room(self, code: str, pid: str) -> Room:
         room = self.get(code)
