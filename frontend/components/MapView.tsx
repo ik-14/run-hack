@@ -242,17 +242,25 @@ export function MapView({
       return;
     }
 
+    // Freeze every map gesture so a drag is only ever a rubber-band, never a
+    // pan/zoom/pitch of the map itself.
     map.dragPan.disable();
+    map.touchZoomRotate.disable();
+    map.touchPitch.disable();
+    map.doubleClickZoom.disable();
     let start: LngLat | null = null;
 
-    const begin = (event: { lngLat: LngLat }) => {
+    type DrawEvent = { lngLat: LngLat; preventDefault?: () => void };
+    const begin = (event: DrawEvent) => {
+      event.preventDefault?.();
       start = event.lngLat;
       setPreview(boundsFromCorners(event.lngLat, event.lngLat));
     };
-    const move = (event: { lngLat: LngLat }) => {
+    const move = (event: DrawEvent) => {
+      event.preventDefault?.();
       if (start) setPreview(boundsFromCorners(start, event.lngLat));
     };
-    const end = (event: { lngLat: LngLat }) => {
+    const end = (event: DrawEvent) => {
       if (!start) return;
       const drawn = boundsFromCorners(start, event.lngLat);
       start = null;
@@ -274,14 +282,32 @@ export function MapView({
       map.off("touchmove", move);
       map.off("touchend", end);
       map.dragPan.enable();
+      map.touchZoomRotate.enable();
+      map.touchPitch.enable();
+      map.doubleClickZoom.enable();
     };
   }, [drawing, ready, onDrawn]);
+
+  // While drawing, swallow native touch scrolling on the map. `touch-action: none`
+  // (set on the wrapper below) covers most browsers; this non-passive listener is
+  // the guarantee on iOS Safari, which otherwise pans the whole page.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !drawing) return;
+    const swallow = (event: TouchEvent) => event.preventDefault();
+    el.addEventListener("touchmove", swallow, { passive: false });
+    return () => el.removeEventListener("touchmove", swallow);
+  }, [drawing]);
 
   // MapLibre owns the inner div's class attribute; Tailwind classes stay on the wrapper
   // so React re-renders can never strip `maplibregl-map` and break the map's positioning.
   return (
-    <div className={className}>
-      <div ref={containerRef} className="h-full w-full" />
+    <div className={className} style={drawing ? { touchAction: "none" } : undefined}>
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={drawing ? { touchAction: "none" } : undefined}
+      />
     </div>
   );
 }
