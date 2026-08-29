@@ -9,4 +9,19 @@ shared map, closed loops become your land, round-based multiplayer with friends.
 
 See [DESIGN.md](./DESIGN.md) for the full design and implementation plan.
 
+## Repo layout
+
+- `backend/` — Python FastAPI game server (in-memory rooms, WebSocket protocol).
+  Ruff for lint/format, Pyright in strict mode, pytest.
+- `frontend/` — Next.js + TypeScript + Tailwind mobile web client.
+
+## Running both halves
+
+```bash
+(cd backend && uv sync && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000)
+(cd frontend && npm install && npm run dev)
+```
+
+Open `http://localhost:3000` on your phone (same network) or desktop.
+
 Ethan test

@@ -1,0 +1,46 @@
+[project]
+name = "runner-io-backend"
+version = "0.1.0"
+description = "Runner.io realtime game server"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "websockets>=13.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+    "httpx>=0.27.2",
+    "ruff>=0.7.0",
+    "pyright>=1.1.386",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/tests/*" = ["ANN"]
+
+[tool.pyright]
+include = ["app"]
+exclude = ["app/tests", "**/.venv"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
