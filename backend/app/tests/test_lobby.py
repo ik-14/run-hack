@@ -92,14 +92,19 @@ def test_play_area_must_be_a_sensible_size():
     assert updated.bounds is not None
 
 
-def test_join_after_start_is_rejected():
+def test_join_mid_round_is_allowed_and_starts_fresh():
     registry = RoomRegistry()
     room, host = registry.create("kal")
     registry.set_bounds(room.code, host.pid, a_rectangle())
     registry.start(room.code, host.pid)
 
-    with pytest.raises(LobbyError, match="already started"):
-        registry.join(room.code, "late")
+    room, latecomer = registry.join(room.code, "late")
+
+    assert room.status == "running"
+    assert latecomer.pid in room.players
+    assert latecomer.trail == []
+    assert latecomer.land is None
+    assert not latecomer.disqualified
 
 
 def test_only_host_can_start_or_configure():

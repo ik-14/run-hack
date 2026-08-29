@@ -142,10 +142,10 @@ class RoomRegistry:
 
     def join(self, code: str, name: str, color: str | None = None) -> tuple[Room, Player]:
         room = self.get(code)
-        if room.status != "lobby":
-            raise LobbyError("that round has already started")
         if len(room.players) >= MAX_PLAYERS:
             raise LobbyError(f"room {room.code} is full")
+        # A latecomer joining a running round starts from scratch — no trail, no land —
+        # which is exactly the fresh Player below, so nothing special is needed here.
         player = Player(
             pid=_new_pid(),
             name=self._unique_name(room, name),
