@@ -61,6 +61,39 @@ From `backend/app/lobby.py` / `territory.py`:
   Note the server only broadcasts a full lobby snapshot on disqualification, so other
   clients do **not** show the amber "outside" tag during the countdown — only "OUT" at the end.
 
+## Driving the app with Playwright over CDP
+
+Attach to the already-running Chrome rather than launching a new browser:
+
+```python
+p = sync_playwright().start()
+b = p.chromium.connect_over_cdp("http://localhost:29229")
+```
+
+Gotchas:
+- Windows created with `Target.createTarget {url, newWindow: True}` are **not** visible to an
+  already-connected Playwright client. Create the windows on a first connection, `p.stop()`,
+  then `sync_playwright().start()` + `connect_over_cdp` again so `browser.contexts[0].pages`
+  lists them.
+- `Browser.grantPermissions` needs the exact origin *including the port* (`http://localhost:3001`
+  if port 3000 is already taken by another dev server).
+- Per-page geolocation: `page.context.new_cdp_session(page)` then
+  `Emulation.setGeolocationOverride`; keep the session object alive for the whole run.
+- The WS sniffer can be installed with `page.add_init_script(...)` instead of raw CDP.
+- Map drags: MapLibre reacts to real OS-level mouse events (computer-use
+  `mouse_move`/`left_mouse_down`/moves/`left_mouse_up`) as well as Playwright's `page.mouse`.
+  If a drag-to-draw never commits, attach a capture-phase listener on the `<canvas>` for
+  `pointerdown/mousedown/mouseup/pointerup` to see whether the release event actually arrives
+  before blaming app logic.
+
+## Camera behaviour in the lobby/live map
+
+`MapView` fits the camera to *all* players that have a fix, re-framing only when the set of
+located pids changes (`fittedRunnersRef`), and does nothing while drawing or once bounds exist.
+So: a second player joining far away should trigger exactly one zoom-out; manual pans afterwards
+must stay put while fixes keep streaming. Players with `lat === null` render no dot and get a
+"no gps" tag in the player list — useful for telling "not sending fixes" apart from "off-screen".
+
 ## Reading authoritative state without a third player
 
 Instead of joining an observer client (which would show up in the player list), install a
