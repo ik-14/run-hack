@@ -34,8 +34,10 @@ in-memory rooms. Hit the URL once before the demo, or use a paid instance on the
 ## 2. Frontend → Vercel
 
 1. Vercel → **Add New → Project** → import `ik-14/run-hack`.
-2. Leave the Root Directory as the repo root — `vercel.json` already points the build
-   at `frontend/`.
+2. Set **Root Directory** to `frontend` (Settings → Build and Deployment). Vercel then
+   auto-detects Next.js and configures the build. Do not add a `vercel.json` with
+   `--prefix frontend` commands — that fights Vercel's own monorepo handling and the
+   Next.js builder still looks for `next` in the *root* `package.json`, which fails.
 3. Add an environment variable for all environments:
 
    ```
